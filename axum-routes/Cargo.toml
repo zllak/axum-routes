@@ -1,0 +1,17 @@
+[package]
+name = "axum-routes"
+version.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+readme.workspace = true
+
+[dependencies]
+## Internal
+axum-routes-macros.workspace = true
+## External
+axum.workspace = true
+thiserror.workspace = true

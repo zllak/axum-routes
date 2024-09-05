@@ -1,0 +1,29 @@
+[workspace]
+members = [
+  "axum-routes",
+  "axum-routes-macros",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Thomas Meson <zllak@hycik.org>"]
+description = "Create an axum Router from an enum and resolve routes"
+homepage = "https://github.com/zllak/axum-routes"
+repository = "https://github.com/zllak/axum-routes"
+license = "MIT"
+readme = "README.md"
+
+[workspace.dependencies]
+## Internal
+axum-routes-macros = { path = "axum-routes-macros", version = "0.1.0" }
+## External
+axum = { version = "0.7", default-features = false }
+matchit = { version = "0.7", default-features = false }
+monch = { version = "0.5", default-features = false }
+proc-macro-crate = { version = "3.2", default-features = false }
+proc-macro2 = { version = "1.0", default-features = false }
+quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
+syn = { version = "2.0", default-features = false, features = ["full", "parsing", "printing", "proc-macro", "extra-traits"] } # remove extra-traits, only for Debug
+thiserror = { version = "1.0", default-features = false }
