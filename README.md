@@ -5,7 +5,7 @@ declare routers through enums, and resolve easily routes, so we don't have to
 hardcode routes when linking in web apps.
 
 [![Crates.io](https://img.shields.io/crates/v/axum-routes)](https://crates.io/crates/axum-routes)
-[![Documentation](https://docs.rs/axum-routes/badge.svg)][docs]
+[![Documentation](https://docs.rs/axum-routes/badge.svg)](https://docs.rs/axum-routes)
 
 ## Features
 - Declare your `axum::Router` using enums
