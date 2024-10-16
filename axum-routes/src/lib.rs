@@ -4,7 +4,7 @@
 //! You can then use this enum to resolve the routes and avoid hardcoding
 //! routes in your project.
 //!
-//! ```no_test,rust
+//! ```ignore,rust
 //! #[routes]
 //! enum RoutesUsers {
 //!     #[post("/", handler = create_user)]
@@ -27,11 +27,11 @@
 //!     Main,
 //! }
 //!
-//! fn create_user() {} // axum handler
-//! fn get_user() {}
-//! fn edit_user() {}
-//! fn delete_user() {}
-//! fn get_other_resource() {}
+//! async fn create_user() {} // axum handler
+//! async fn get_user() {}
+//! async fn edit_user() {}
+//! async fn delete_user() {}
+//! async fn get_other_resource() {}
 //! ```
 //!
 //! The route path (ie "/:id") is exactly what `axum` supports (underneath
