@@ -48,7 +48,7 @@ impl ToTokens for Route {
 
 use monch::*;
 
-#[derive(thiserror::Error, Debug, Clone)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq)]
 #[error("Invalid route")]
 pub struct ParseRouteError {
     #[source]
@@ -64,17 +64,14 @@ impl ParseRouteError {
 
 /// Parses a route (string), and return a list containing the components
 /// of the route, meaning either a path, or a parameter
-/// To be sure to be future friendly, and as axum relies on matchit for
-/// its routes, we support both :id and {id} as axum will eventually update
-/// its matchit dependency.
+/// We are now depending on axum 0.8, so old version of matchit will produce
+/// a panic to avoid silent fails. So we only support new matchit pattern.
 ///
 /// Grammar:
 ///
 /// route        ::= ( path | parameter )+
 /// path         ::= [^{:]*
-/// parameter    ::= ( old_matchit | new_matchit )
-/// old_matchit  ::= ( ':' [^:/]+ )
-/// new_matchit  ::= ( '{' [^}]+ '}' )
+/// parameter    ::= ( '{' [^}]+ '}' )
 pub fn parse_route_into_components(input: &str) -> Result<Vec<RouteComponent>, ParseRouteError> {
     with_failure_handling(|input| many1(or(path, parameter))(input))(input)
         .map_err(|err| ParseRouteError { source: err })
@@ -87,19 +84,6 @@ fn path(input: &str) -> ParseResult<RouteComponent> {
 }
 
 fn parameter(input: &str) -> ParseResult<RouteComponent> {
-    or(old_matchit, new_matchit)(input)
-}
-
-fn old_matchit(input: &str) -> ParseResult<RouteComponent> {
-    preceded(
-        ch(':'),
-        map(if_not_empty(take_while(|c| c != ':' && c != '/')), |text| {
-            RouteComponent::Parameter(text.to_string())
-        }),
-    )(input)
-}
-
-fn new_matchit(input: &str) -> ParseResult<RouteComponent> {
     terminated(
         preceded(
             ch('{'),
@@ -127,10 +111,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn old_matchit() -> Result<(), ParseRouteError> {
+        let ret = parse_route_into_components("/company/:company_id/users/:user_id/list");
+        let expected_err = Err(ParseRouteError {
+            source: monch::ParseErrorFailureError {
+                message: String::from("Unexpected character."),
+                code_snippet: Some(String::from(":company_id/users/:user_id/list")),
+            },
+        });
+        assert_eq!(ret, expected_err);
+
+        Ok(())
+    }
+
+    #[test]
     fn parsing() -> Result<(), ParseRouteError> {
         // TODO(zllak): some special fuzzying could be interesting
         assert_eq!(
-            parse_route_into_components("/segment{param}/".into())?,
+            parse_route_into_components("/segment{param}/")?,
             Vec::from([
                 RouteComponent::Path("/segment".into()),
                 RouteComponent::Parameter("param".into()),
@@ -138,21 +136,11 @@ mod tests {
             ])
         );
         assert_eq!(
-            parse_route_into_components("/{&*(}/segment?wer".into())?,
+            parse_route_into_components("/{&*(}/segment?wer")?,
             Vec::from([
                 RouteComponent::Path("/".into()),
                 RouteComponent::Parameter("&*(".into()),
                 RouteComponent::Path("/segment?wer".into()),
-            ])
-        );
-        assert_eq!(
-            parse_route_into_components("/company/:company_id/users/:user_id/list".into())?,
-            Vec::from([
-                RouteComponent::Path("/company/".into()),
-                RouteComponent::Parameter("company_id".into()),
-                RouteComponent::Path("/users/".into()),
-                RouteComponent::Parameter("user_id".into()),
-                RouteComponent::Path("/list".into()),
             ])
         );
 
