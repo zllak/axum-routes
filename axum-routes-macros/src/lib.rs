@@ -248,7 +248,7 @@ pub fn routes(attr: TokenStream, item: TokenStream) -> TokenStream {
         };
         )*
 
-        #vis impl #krate::__private::Router for self::#name {
+        impl #krate::__private::Router for self::#name {
             fn routes(customize: &std::collections::HashMap<&'static str, #krate::__private::RouteCustomizer>) -> #krate_axum::Router {
                 let mut router = #krate_axum::Router::new();
 
