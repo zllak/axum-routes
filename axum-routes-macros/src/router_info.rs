@@ -255,7 +255,9 @@ impl Parse for RouterAttributeList {
         Punctuated::<Meta, Comma>::parse_terminated(input)?
             .into_iter()
             .map(|meta| match meta {
-                Meta::Path(_) | Meta::List(_) => Err(syn::Error::new(meta.span(), "sdf")),
+                Meta::Path(_) | Meta::List(_) => {
+                    Err(syn::Error::new(meta.span(), "support only <key> = <value>"))
+                }
                 Meta::NameValue(name_value) => {
                     // Make sure the Path is actually a single Ident
                     let key_ident = name_value.path.get_ident().cloned().ok_or(syn::Error::new(
