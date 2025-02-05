@@ -126,7 +126,7 @@ pub(crate) enum RouterVariantKind {
         // The route with all components
         route: Route,
         // Handler to call for this route
-        handler: Ident,
+        handler: Path,
         // Closure to call to customize the method router
         customize: Option<Ident>,
     },
@@ -184,7 +184,9 @@ impl Parse for RouterVariantKind {
                     ));
                 };
                 // Pop the customize
-                let customize = attributes_list.remove("customize").map(|(_, ident)| ident);
+                let customize = attributes_list
+                    .remove("customize")
+                    .and_then(|(_, ident)| ident.get_ident().cloned());
                 // No more attributes expected
                 if let Some((name, (span, _))) = attributes_list.iter().next() {
                     return Err(syn::Error::new(*span, format!("unknown {name} attribute")));
@@ -202,7 +204,9 @@ impl Parse for RouterVariantKind {
 
                 if let Some(mut attributes_list) = attributes_list {
                     // Pop the customize if any
-                    customize = attributes_list.remove("customize").map(|(_, ident)| ident);
+                    customize = attributes_list
+                        .remove("customize")
+                        .and_then(|(_, ident)| ident.get_ident().cloned());
                     // If we have more attributes, it's an error
                     if let Some((name, (span, _))) = attributes_list.iter().next() {
                         return Err(syn::Error::new(*span, format!("unknown {name} attribute")));
@@ -224,13 +228,13 @@ impl Parse for RouterVariantKind {
 /// ie: handler = some_handler, id = Ty
 #[derive(Debug, Default)]
 pub(crate) struct RouterAttributeList {
-    inner: HashMap<String, (Span, Ident)>,
+    inner: HashMap<String, (Span, Path)>,
 }
 
-impl TryFrom<Vec<(Ident, Ident)>> for RouterAttributeList {
+impl TryFrom<Vec<(Ident, Path)>> for RouterAttributeList {
     type Error = Error;
 
-    fn try_from(value: Vec<(Ident, Ident)>) -> Result<Self, Self::Error> {
+    fn try_from(value: Vec<(Ident, Path)>) -> Result<Self, Self::Error> {
         let mut inner = HashMap::with_capacity(value.len());
 
         for (key, value) in value.into_iter() {
@@ -259,14 +263,10 @@ impl Parse for RouterAttributeList {
                         "attribute key must be a single identifier",
                     ))?;
 
-                    // Make sure the value is a single Ident (extracted from an
-                    // expected Path)
+                    // Only expect a Path here
                     let value_ident = if let syn::Expr::Path(ref path) = name_value.value {
                         // Same as above, make sure we have a single Ident
-                        path.path.get_ident().cloned().ok_or(syn::Error::new(
-                            name_value.value.span(),
-                            "attribute value must be a single identifier",
-                        ))
+                        Ok(path.path.clone())
                     } else {
                         Err(syn::Error::new(
                             name_value.value.span(),
@@ -277,17 +277,17 @@ impl Parse for RouterAttributeList {
                     Ok((key_ident, value_ident))
                 }
             })
-            .collect::<Result<Vec<(Ident, Ident)>, _>>()?
+            .collect::<Result<Vec<(Ident, Path)>, _>>()?
             .try_into()
     }
 }
 
 impl RouterAttributeList {
-    pub(crate) fn iter(&self) -> std::collections::hash_map::Iter<'_, String, (Span, Ident)> {
+    pub(crate) fn iter(&self) -> std::collections::hash_map::Iter<'_, String, (Span, Path)> {
         self.inner.iter()
     }
 
-    pub(crate) fn remove(&mut self, k: &str) -> Option<(Span, Ident)> {
+    pub(crate) fn remove(&mut self, k: &str) -> Option<(Span, Path)> {
         self.inner.remove(k)
     }
 }
