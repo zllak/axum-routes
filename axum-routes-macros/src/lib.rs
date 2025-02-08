@@ -99,26 +99,42 @@ pub fn routes(attr: TokenStream, item: TokenStream) -> TokenStream {
             return Err(syn::Error::new(variant.span(), "attribute missing"));
         }
 
-        let (attr, other_attributes) = variant.attrs.iter().try_fold((None, Vec::new()), |(mut attr, mut other_attrs), current_attr| {
+        let (attr, other_attributes, conditional) = variant.attrs.iter().try_fold((None, Vec::new(), Vec::new()), |(mut attr, mut other_attrs, mut conditional), current_attr| {
             // We only accept List
             match &current_attr.meta {
-                Meta::List(_) => {
-                    // FIXME: this will fail if the attribute is another meta
-                    let parsed_attr = syn::parse2::<RouterVariantKind>(current_attr.meta.to_token_stream())?;
-                    let _ = attr.insert(parsed_attr);
+                Meta::List(list) => {
+                    // We must check a little bit the list to determine early
+                    // if the attribute is one of ours or not.
+                    let attr_ident = list.path.segments.first().map(|segment| segment.ident.to_string());
+                    if let Some(attr_ident) = attr_ident {
+                        match attr_ident.as_ref() {
+                            "cfg" | "cfg_attr" => {
+                                // Conditional compilation
+                                conditional.push(current_attr.clone());
+                            }
+                            "get" | "post" | "put" | "head" | "options" | "delete" | "any" | "nest" => {
+                                let parsed_attr = syn::parse2::<RouterVariantKind>(current_attr.meta.to_token_stream())?;
+                                let _ = attr.insert(parsed_attr);
+                            }
+                            _ => {
+                                // Entirely another attribute that we don't know
+                                other_attrs.push(current_attr.clone());
+                            }
+                        }
+                    }
                 }
                 Meta::Path(_) | Meta::NameValue(_) => {
                     other_attrs.push(current_attr.clone())
                 }
             };
 
-            Ok::<_, syn::Error>((attr, other_attrs))
+            Ok::<_, syn::Error>((attr, other_attrs, conditional))
         })?;
         // used multiple times so to avoid moving variant, use the span that we
         // will copy
         let variant_span = variant.span();
 
-        let mut attr = attr.ok_or(syn::Error::new(variant_span, "variant must have an attribute (get, post, put, head, options, delete, nest)"))?;
+        let mut attr = attr.ok_or(syn::Error::new(variant_span, "variant must have an attribute (get, post, put, head, options, delete, any, nest)"))?;
 
         // Accept exactly one field for nested routers
         if let RouterVariantKind::Nest { ref mut ident, .. } = attr {
@@ -152,6 +168,7 @@ pub fn routes(attr: TokenStream, item: TokenStream) -> TokenStream {
             span: variant_span,
             kind: attr,
             other_attributes,
+            conditional_compilation: conditional,
         })
     }).collect::<Result<Vec<RouterVariant>, syn::Error>>();
     let variants = match variants {
@@ -203,15 +220,23 @@ pub fn routes(attr: TokenStream, item: TokenStream) -> TokenStream {
                 customize,
                 ..
             } => {
+                let conditional = &variant.conditional_compilation;
+
                 if let Some(customize) = customize {
                     let customize = customize.to_string();
                     let name = name.to_string();
                     quote::quote! {
-                        router = customize.get(#customize).expect(format!("Router {} requires a customizer named {}", #name, #customize).as_str()).customize_router(router.nest(#route, #ident::routes(customize)));
+                        #(#conditional)*
+                        {
+                            router = customize.get(#customize).expect(format!("Router {} requires a customizer named {}", #name, #customize).as_str()).customize_router(router.nest(#route, #ident::routes(customize)));
+                        }
                     }
                 } else {
                     quote::quote! {
-                        router = router.nest(#route, #ident::routes(customize));
+                        #(#conditional)*
+                        {
+                            router = router.nest(#route, #ident::routes(customize));
+                        }
                     }
                 }
             }
@@ -222,15 +247,23 @@ pub fn routes(attr: TokenStream, item: TokenStream) -> TokenStream {
                 customize,
                 ..
             } => {
+                let conditional = &variant.conditional_compilation;
+
                 if let Some(customize) = customize {
                     let customize = customize.to_string();
                     let name = name.to_string();
                     quote::quote! {
-                        router = router.route(#route, customize.get(#customize).expect(format!("Router {} requires a customizer named {}", #name, #customize).as_str()).customize_route(#krate_axum::routing::#method(#handler)));
+                        #(#conditional)*
+                        {
+                            router = router.route(#route, customize.get(#customize).expect(format!("Router {} requires a customizer named {}", #name, #customize).as_str()).customize_route(#krate_axum::routing::#method(#handler)));
+                        }
                     }
                 } else {
                     quote::quote! {
-                        router = router.route(#route, #krate_axum::routing::#method(#handler));
+                        #(#conditional)*
+                        {
+                            router = router.route(#route, #krate_axum::routing::#method(#handler));
+                        }
                     }
                 }
             }

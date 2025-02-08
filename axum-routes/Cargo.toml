@@ -21,3 +21,6 @@ name = "path_handlers"
 
 [[example]]
 name = "visibility"
+
+[[example]]
+name = "multiple_attributes"

@@ -26,12 +26,15 @@ pub(crate) struct RouterVariant {
     pub(crate) kind: RouterVariantKind,
     // Other attributes on that variant
     pub(crate) other_attributes: Vec<Attribute>,
+    // Conditional compilation
+    pub(crate) conditional_compilation: Vec<Attribute>,
 }
 
 impl ToTokens for RouterVariant {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let other_attrs = &self.other_attributes;
         let variant = &self.variant;
+        let conditional = &self.conditional_compilation;
 
         let ts = match &self.kind {
             RouterVariantKind::Nest { ident, .. } => {
@@ -39,12 +42,14 @@ impl ToTokens for RouterVariant {
                 // only one field
                 let ident = ident.as_ref().unwrap();
                 quote::quote! {
+                    #(#conditional)*
                     #(#other_attrs)*
                     #variant(#ident)
                 }
             }
             RouterVariantKind::Method { .. } => {
                 quote::quote! {
+                    #(#conditional)*
                     #(#other_attrs)*
                     #variant
                 }
@@ -73,6 +78,7 @@ impl RouterVariant {
     pub(crate) fn match_statement(&self) -> proc_macro2::TokenStream {
         let krate = crate::util::axum_routes_crate();
         let variant = &self.variant;
+        let conditional = &self.conditional_compilation;
 
         match &self.kind {
             RouterVariantKind::Nest { route, .. } => {
@@ -81,6 +87,7 @@ impl RouterVariant {
                 // Here we don't need to check at the end if we have to much
                 // params, cause it will be handled by the recursive resolve_route
                 quote::quote! {
+                    #(#conditional)*
                     Self::#variant(nested) => {
                         vec![
                             #(#components),*,
@@ -93,6 +100,7 @@ impl RouterVariant {
                 let components = route_components_to_tokenstream(&route.components);
 
                 quote::quote! {
+                    #(#conditional)*
                     Self::#variant => {
                         let resolved = vec![
                             #(#components),*
