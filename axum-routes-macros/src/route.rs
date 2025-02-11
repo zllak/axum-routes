@@ -4,6 +4,8 @@ use syn::{
     LitStr,
 };
 
+/// The HTTP route as a string
+/// ie /this/:param/:other
 #[derive(Debug, Default)]
 pub(crate) struct Route {
     /// The route as a string
@@ -79,7 +81,7 @@ pub fn parse_route_into_components(input: &str) -> Result<Vec<RouteComponent>, P
 
 fn path(input: &str) -> ParseResult<RouteComponent> {
     map(if_not_empty(take_while(|c| c != '{' && c != ':')), |text| {
-        RouteComponent::Path(text.to_string())
+        RouteComponent::Path(text.to_owned())
     })(input)
 }
 
@@ -88,7 +90,7 @@ fn parameter(input: &str) -> ParseResult<RouteComponent> {
         preceded(
             ch('{'),
             map(if_not_empty(take_while(|c| c != '}')), |text| {
-                RouteComponent::Parameter(text.to_string())
+                RouteComponent::Parameter(text.to_owned())
             }),
         ),
         ch('}'),
