@@ -1,43 +1,41 @@
 //! Struct that will contain all data gathered by the parsing of the TokenStream.
 //! This will be used to construct the macro codegen
 
-use crate::{Method, Route, RouteComponent};
+use super::method::Method;
+use super::route::{Route, RouteComponent};
+use crate::punctuated_attrs::PunctuatedAttrs;
 use proc_macro2::Span;
 use quote::ToTokens;
-use std::collections::HashMap;
 use syn::{
     parenthesized,
     parse::{Parse, ParseStream},
-    punctuated::Punctuated,
-    spanned::Spanned as _,
-    token::Comma,
-    Attribute, Error, Ident, Meta, Path,
+    Attribute, Ident, Path,
 };
 
 // ----------------------------------------------------------------------------
 
 #[derive(Debug)]
-pub(crate) struct RouterVariant {
+pub(crate) struct Variant {
     // Name of the variant
     pub(crate) variant: Ident,
     // Span for proper error
     pub(crate) span: Span,
     // The variant kind
-    pub(crate) kind: RouterVariantKind,
+    pub(crate) kind: VariantKind,
     // Other attributes on that variant
     pub(crate) other_attributes: Vec<Attribute>,
     // Conditional compilation
     pub(crate) conditional_compilation: Vec<Attribute>,
 }
 
-impl ToTokens for RouterVariant {
+impl ToTokens for Variant {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let other_attrs = &self.other_attributes;
         let variant = &self.variant;
         let conditional = &self.conditional_compilation;
 
         let ts = match &self.kind {
-            RouterVariantKind::Nest { ident, .. } => {
+            VariantKind::Nest { ident, .. } => {
                 // this should be safe, as we made sure we had one and
                 // only one field
                 let ident = ident.as_ref().unwrap();
@@ -47,7 +45,7 @@ impl ToTokens for RouterVariant {
                     #variant(#ident)
                 }
             }
-            RouterVariantKind::Method { .. } => {
+            VariantKind::Method { .. } => {
                 quote::quote! {
                     #(#conditional)*
                     #(#other_attrs)*
@@ -73,7 +71,7 @@ fn route_components_to_tokenstream(components: &[RouteComponent]) -> Vec<proc_ma
         .collect()
 }
 
-impl RouterVariant {
+impl Variant {
     /// Used in the resolve_route to generate the route
     pub(crate) fn match_statement(&self) -> proc_macro2::TokenStream {
         let krate = crate::util::axum_routes_crate();
@@ -81,7 +79,7 @@ impl RouterVariant {
         let conditional = &self.conditional_compilation;
 
         match &self.kind {
-            RouterVariantKind::Nest { route, .. } => {
+            VariantKind::Nest { route, .. } => {
                 let components = route_components_to_tokenstream(&route.components);
 
                 // Here we don't need to check at the end if we have to much
@@ -96,7 +94,7 @@ impl RouterVariant {
                     }
                 }
             }
-            RouterVariantKind::Method { route, .. } => {
+            VariantKind::Method { route, .. } => {
                 let components = route_components_to_tokenstream(&route.components);
 
                 quote::quote! {
@@ -119,7 +117,7 @@ impl RouterVariant {
 // ----------------------------------------------------------------------------
 
 #[derive(Debug)]
-pub(crate) enum RouterVariantKind {
+pub(crate) enum VariantKind {
     Nest {
         // Nested Router ident
         ident: Option<Path>,
@@ -141,7 +139,7 @@ pub(crate) enum RouterVariantKind {
 }
 
 /// Parses the attributes (only the part inside the #[...])
-impl Parse for RouterVariantKind {
+impl Parse for VariantKind {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // Expect an ident (nest, get, ...)
         let ident: Ident = input.parse()?;
@@ -172,8 +170,8 @@ impl Parse for RouterVariantKind {
         let _ = parenthesized!(content in input);
 
         // Parse the attribute (route(, (key = value)+)?)
-        let route: crate::Route = content.parse()?;
-        let mut attributes_list: Option<RouterAttributeList> = None;
+        let route: Route = content.parse()?;
+        let mut attributes_list: Option<PunctuatedAttrs<Ident, Path>> = None;
         if !content.is_empty() {
             let _: syn::Token![,] = content.parse()?;
             attributes_list = Some(content.parse()?);
@@ -185,19 +183,22 @@ impl Parse for RouterVariantKind {
                     return Err(syn::Error::new(input.span(), "missing attributes"));
                 };
                 // Pop the handler
-                let Some((_, handler)) = attributes_list.remove("handler") else {
+                let Some(handler) = attributes_list.remove("handler") else {
                     return Err(syn::Error::new(
-                        input.span(),
+                        ident.span(),
                         "should have an \"handler\" attribute",
                     ));
                 };
                 // Pop the customize
                 let customize = attributes_list
                     .remove("customize")
-                    .and_then(|(_, ident)| ident.get_ident().cloned());
+                    .and_then(|ident| ident.get_ident().cloned());
                 // No more attributes expected
-                if let Some((name, (span, _))) = attributes_list.iter().next() {
-                    return Err(syn::Error::new(*span, format!("unknown {name} attribute")));
+                if let Some((name, _)) = attributes_list.iter().next() {
+                    return Err(syn::Error::new(
+                        name.span(),
+                        format!("unknown {name} attribute"),
+                    ));
                 }
 
                 Self::Method {
@@ -214,10 +215,13 @@ impl Parse for RouterVariantKind {
                     // Pop the customize if any
                     customize = attributes_list
                         .remove("customize")
-                        .and_then(|(_, ident)| ident.get_ident().cloned());
+                        .and_then(|ident| ident.get_ident().cloned());
                     // If we have more attributes, it's an error
-                    if let Some((name, (span, _))) = attributes_list.iter().next() {
-                        return Err(syn::Error::new(*span, format!("unknown {name} attribute")));
+                    if let Some((name, _)) = attributes_list.iter().next() {
+                        return Err(syn::Error::new(
+                            name.span(),
+                            format!("unknown {name} attribute"),
+                        ));
                     }
                 }
                 Self::Nest {
@@ -227,77 +231,5 @@ impl Parse for RouterVariantKind {
                 }
             }
         })
-    }
-}
-
-// ----------------------------------------------------------------------------
-
-/// The attributes in a #[...]
-/// ie: handler = some_handler, id = Ty
-#[derive(Debug, Default)]
-pub(crate) struct RouterAttributeList {
-    inner: HashMap<String, (Span, Path)>,
-}
-
-impl TryFrom<Vec<(Ident, Path)>> for RouterAttributeList {
-    type Error = Error;
-
-    fn try_from(value: Vec<(Ident, Path)>) -> Result<Self, Self::Error> {
-        let mut inner = HashMap::with_capacity(value.len());
-
-        for (key, value) in value.into_iter() {
-            let key_string = key.to_string();
-            if inner.contains_key(&key_string) {
-                return Err(syn::Error::new(key.span(), "duplicate attribute"));
-            }
-
-            inner.insert(key_string, (key.span(), value));
-        }
-
-        Ok(Self { inner })
-    }
-}
-
-impl Parse for RouterAttributeList {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        Punctuated::<Meta, Comma>::parse_terminated(input)?
-            .into_iter()
-            .map(|meta| match meta {
-                Meta::Path(_) | Meta::List(_) => {
-                    Err(syn::Error::new(meta.span(), "support only <key> = <value>"))
-                }
-                Meta::NameValue(name_value) => {
-                    // Make sure the Path is actually a single Ident
-                    let key_ident = name_value.path.get_ident().cloned().ok_or(syn::Error::new(
-                        name_value.path.span(),
-                        "attribute key must be a single identifier",
-                    ))?;
-
-                    // Only expect a Path here
-                    let value_ident = if let syn::Expr::Path(ref path) = name_value.value {
-                        // Same as above, make sure we have a single Ident
-                        Ok(path.path.clone())
-                    } else {
-                        Err(syn::Error::new(
-                            name_value.value.span(),
-                            "value must be an identifier",
-                        ))
-                    }?;
-
-                    Ok((key_ident, value_ident))
-                }
-            })
-            .collect::<Result<Vec<(Ident, Path)>, _>>()?
-            .try_into()
-    }
-}
-
-impl RouterAttributeList {
-    pub(crate) fn iter(&self) -> std::collections::hash_map::Iter<'_, String, (Span, Path)> {
-        self.inner.iter()
-    }
-
-    pub(crate) fn remove(&mut self, k: &str) -> Option<(Span, Path)> {
-        self.inner.remove(k)
     }
 }

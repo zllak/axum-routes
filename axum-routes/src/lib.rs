@@ -1,6 +1,6 @@
 //! # Axum Routes
 //!
-//! Create an [`axum::Router`] from an enum.
+//! Create an [`axum::Router`](https://docs.rs/axum/latest/axum/struct.Router.html) from an enum.
 //! You can then use this enum to resolve the routes and avoid hardcoding
 //! routes in your project.
 //!
