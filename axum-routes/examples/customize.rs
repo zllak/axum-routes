@@ -10,8 +10,20 @@ pub async fn get() -> &'static str {
 enum Router {
     #[get("/", handler = get, customize = home_customizer)]
     Home,
+    #[nest("/nest")]
+    Nested(Nested),
+}
+
+#[routes]
+enum Nested {
+    #[get("/", handler = get, customize = home_customizer)]
+    OtherHome,
 }
 
 fn main() {
-    let _routes = axum_routes::router!(Router, home_customizer = #|route| route);
+    let _routes = axum_routes::router!(
+        Router,
+        home_customizer = |route| route,
+        other_customizer = |route| route,
+    );
 }
