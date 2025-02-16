@@ -94,14 +94,21 @@ pub mod __private {
         ParametersMismatch,
     }
 
+    #[doc(hidden)]
+    pub type FnMethodCustomizer =
+        Box<dyn Fn(axum::routing::MethodRouter) -> axum::routing::MethodRouter>;
+    #[doc(hidden)]
+    pub type FnRouterCustomizer = Box<dyn Fn(axum::Router) -> axum::Router>;
+
     /// Trait to generate the routes for an enum
     #[doc(hidden)]
     pub trait Router {
-        /// Returns an `axum::Router` with the routes defined by the routes macro
-        fn routes(
-            customize: &std::collections::HashMap<&'static str, crate::__private::RouteCustomizer>,
-        ) -> axum::Router;
+        type Builder: Default;
 
+        /// Returns a builder to generate with router
+        fn builder() -> Self::Builder {
+            Self::Builder::default()
+        }
         /// Resolve the given enum variant with the parameters
         fn resolve_route(
             &self,
@@ -152,33 +159,4 @@ pub mod __private {
     impl_route_parameters!(A, B, C, D, E, F, G, H);
     impl_route_parameters!(A, B, C, D, E, F, G, H, I);
     impl_route_parameters!(A, B, C, D, E, F, G, H, I, J);
-
-    // ----------------------------------------------------------------------------
-
-    #[doc(hidden)]
-    pub enum RouteCustomizer {
-        Router(Box<dyn Fn(axum::Router) -> axum::Router>),
-        MethodRouter(Box<dyn Fn(axum::routing::MethodRouter) -> axum::routing::MethodRouter>),
-    }
-
-    impl RouteCustomizer {
-        pub fn customize_router(&self, router: axum::Router) -> axum::Router {
-            if let Self::Router(call) = self {
-                (call)(router)
-            } else {
-                panic!("should not be called on MethodRouter");
-            }
-        }
-
-        pub fn customize_route(
-            &self,
-            route: axum::routing::MethodRouter,
-        ) -> axum::routing::MethodRouter {
-            if let Self::MethodRouter(call) = self {
-                (call)(route)
-            } else {
-                panic!("should not be called on Router");
-            }
-        }
-    }
 }

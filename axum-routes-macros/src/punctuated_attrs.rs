@@ -18,6 +18,14 @@ pub(crate) struct PunctuatedAttrs<K, V> {
     inner: HashMap<Key<K>, Value<V>>,
 }
 
+impl<K, V> Default for PunctuatedAttrs<K, V> {
+    fn default() -> Self {
+        Self {
+            inner: HashMap::default(),
+        }
+    }
+}
+
 //-----------------------------------------------------------------------------
 
 impl<K, V> Parse for PunctuatedAttrs<K, V>
@@ -64,7 +72,6 @@ impl<K, V> PunctuatedAttrs<K, V>
 where
     K: Hash + Eq + PartialEq + Parse,
 {
-    // FIXME not Value<V> and Span is weird
     pub(crate) fn remove(&mut self, k: impl AsRef<str>) -> Option<V> {
         self.inner
             .remove(&Key(syn::parse_str::<K>(k.as_ref()).ok()?))
@@ -129,6 +136,14 @@ impl TryFrom<Expr> for Value<Path> {
         } else {
             Err(Error::new(value.span(), "expected a path"))
         }
+    }
+}
+
+impl TryFrom<Expr> for Value<Expr> {
+    type Error = Error;
+
+    fn try_from(value: Expr) -> Result<Self, Self::Error> {
+        Ok(Self(value))
     }
 }
 
