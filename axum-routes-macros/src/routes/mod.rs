@@ -163,120 +163,78 @@ pub fn try_expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     // Now create the quotes to create the axum::Router
     let routes = variants
-        .iter()
-        .map(|(name, variant)| match &variant.kind {
-            VariantKind::Nest {
-                ident,
-                route,
-                customize,
-                ..
-            } => {
-                let conditional = &variant.conditional_compilation;
+        .values()
+        .map(|variant| {
+            match &variant.kind {
+                VariantKind::Nest {
+                    ident,
+                    route,
+                    customize,
+                    ..
+                } => {
+                    let conditional = &variant.conditional_compilation;
 
-                if customize.is_some() {
-                    quote::quote! {
-                        #(#conditional)*
-                        {
-                            router = router.nest(
-                                #route,
-                                (self.#name.expect("FIXME"))(
-                                    #ident::routes(customize)
-                                )
-                            );
+                    if let Some(customize) = customize {
+                        let customize_name = customize.to_string();
+                        quote::quote! {
+                            #(#conditional)*
+                            {
+                                router = router.nest(
+                                    #route,
+                                    (registry.require::<#krate::__private::BoxedFnRouterCustomizer>(#customize_name))(
+                                        <#ident as #krate::__private::Router>::build(registry)
+                                    ),
+                                );
+                            }
                         }
-                    }
-                } else {
-                    quote::quote! {
-                        #(#conditional)*
-                        {
-                            router = router.nest(#route, #ident::routes(customize));
+                    } else {
+                        quote::quote! {
+                            #(#conditional)*
+                            {
+                                router = router.nest(#route, <#ident as #krate::__private::Router>::build(registry));
+                            }
                         }
                     }
                 }
-            }
-            VariantKind::Method {
-                method,
-                route,
-                handler,
-                customize,
-                ..
-            } => {
-                let conditional = &variant.conditional_compilation;
+                VariantKind::Method {
+                    method,
+                    route,
+                    handler,
+                    customize,
+                    ..
+                } => {
+                    let conditional = &variant.conditional_compilation;
 
-                if customize.is_some() {
-                    quote::quote! {
-                        #(#conditional)*
-                        {
-                            router = router.route(
-                                #route,
-                                (self.#name.expect("FIXME"))(
+                    if let Some(customize) = customize {
+                        let customize_name = customize.to_string();
+                        quote::quote! {
+                            #(#conditional)*
+                            {
+                                router = router.route(
+                                    #route,
+                                    (registry.require::<#krate::__private::BoxedFnMethodCustomizer>(#customize_name))(
+                                        #krate_axum::routing::#method(#handler)
+                                    ),
+                                );
+                            }
+                        }
+                    } else {
+                        quote::quote! {
+                            #(#conditional)*
+                            {
+                                router = router.route(
+                                    #route,
                                     #krate_axum::routing::#method(
                                         #handler
                                     )
-                                )
-                            );
-                        }
-                    }
-                } else {
-                    quote::quote! {
-                        #(#conditional)*
-                        {
-                            router = router.route(
-                                #route,
-                                #krate_axum::routing::#method(
-                                    #handler
-                                )
-                            );
+                                );
+                            }
                         }
                     }
                 }
             }
         })
         .collect::<Vec<_>>();
-
-    // The builder
-    let builder = crate::util::builder_struct_name(&name);
-    let (builder_fields, builder_methods) = variants.iter().fold(
-        (Vec::default(), Vec::default()),
-        |(mut fields, mut methods), (name, variant)| {
-            match &variant.kind {
-                VariantKind::Nest {
-                     customize, ..
-                } => {
-                    if let Some(customize) = customize {
-                        let fn_name = crate::util::builder_fn_name(customize);
-                        fields.push(quote::quote! {
-                            #name: Option<#krate::__private::FnRouterCustomizer>
-                        });
-                        methods.push(quote::quote!{
-                            #vis fn #fn_name(mut self, method: #krate::__private::FnRouterCustomizer) -> Self {
-                                self.#name = Some(method);
-                                self
-                            }
-                        });
-                    }
-                }
-                VariantKind::Method {
-                     customize, ..
-                } => {
-                    if let Some(customize) = customize {
-                        let fn_name = crate::util::builder_fn_name(customize);
-                        fields.push(quote::quote! {
-                            #name: Option<#krate::__private::FnMethodCustomizer>
-                        });
-                        methods.push(quote::quote!{
-                            #vis fn #fn_name(mut self, method: #krate::__private::FnMethodCustomizer) -> Self {
-                                self.#name = Some(method);
-                                self
-                            }
-                        });
-                    }
-                }
-            }
-
-            (fields, methods)
-        },
-    );
 
     // TODO(zllak): for the builder fields & methods, we use the customizer name
     // Maybe it would be better to completely ignore this given name and generate
@@ -295,30 +253,16 @@ pub fn try_expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         };
         )*
 
-        #[derive(Default)]
-        #[allow(non_snake_case)]
-        #vis struct #builder {
-            #(#builder_fields),*
-        }
-
-        impl self::#builder {
-            #(#builder_methods)*
-        }
-        impl self::#builder {
-            #vis fn build(self) -> axum::Router {
-                let mut router = #krate_axum::Router::new();
-
+        impl #krate::__private::Router for self::#name {
+            #[allow(unused_variables, reason = "might be unused if no customizers")]
+            fn build(registry: &#krate::__private::CustomizerRegistry) -> #krate_axum::Router {
+                let mut router = #krate_axum::Router::default();
                 #(#routes)*
-
                 router
             }
-        }
-
-        impl #krate::__private::Router for self::#name {
-            type Builder = self::#builder;
 
             fn resolve_route(&self, params: Vec<String>) -> Result<String, #krate::__private::RouteResolverError> {
-                let mut params: std::collections::VecDeque<String> = params.into();
+                let params: std::collections::VecDeque<String> = params.into();
                 Ok(match self {
                     #(#variants_resolve_route)*
                 })

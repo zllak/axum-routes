@@ -33,21 +33,24 @@ pub(crate) fn try_expand(input: TokenStream) -> Result<TokenStream> {
     let rm = syn::parse::<Router>(input)?;
     let router_path = rm.router_path;
 
-    let setters = rm
+    let customizers = rm
         .customize
         .iter()
         .map(|(ident, expr)| {
-            let fn_name = crate::util::builder_fn_name(ident);
+            let name = ident.to_string();
             quote::quote! {
-                .#fn_name(Box::new(#expr))
+                (#name, Box::new(#expr))
             }
         })
         .collect::<Vec<_>>();
 
     Ok(quote::quote! {
-        <#router_path as #krate::__private::Router>::builder()
-        #(#setters)*
-        .build()
+        {
+            let registry = #krate::__private::CustomizerRegistry::from([
+                #(#customizers),*
+            ]);
+            <#router_path as #krate::__private::Router>::build(&registry)
+        }
     }
     .into())
 }

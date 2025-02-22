@@ -87,6 +87,45 @@ pub mod __private {
         pub _field: core::marker::PhantomData<T>,
     }
 
+    /// For customizers, as we are nesting routers that can also use
+    /// customizers, but there is no way of knowing which nested router
+    /// uses which customizers, we need to have an hashmap of customizers.
+    /// And as we are supporting different customizers, we need some kind of
+    /// type erasure.
+    #[doc(hidden)]
+    pub struct CustomizerRegistry {
+        inner: ::std::collections::HashMap<&'static str, Box<dyn ::std::any::Any>>,
+    }
+
+    impl CustomizerRegistry {
+        pub fn get<T: 'static>(&self, name: &'static str) -> Option<&T> {
+            self.inner
+                .get(name)
+                .and_then(|boxed| boxed.downcast_ref::<T>())
+        }
+
+        #[expect(clippy::panic, reason = "expected to panic if missing")]
+        pub fn require<T: 'static>(&self, name: &'static str) -> &T {
+            self.get::<T>(name)
+                .unwrap_or_else(|| panic!("missing customizer with name: {name}"))
+        }
+    }
+
+    impl<V, const N: usize> From<[(&'static str, V); N]> for CustomizerRegistry
+    where
+        V: ::std::any::Any,
+    {
+        fn from(value: [(&'static str, V); N]) -> Self {
+            Self {
+                inner: ::std::collections::HashMap::from_iter(
+                    value
+                        .into_iter()
+                        .map(|(k, v)| (k, Box::new(v) as Box<dyn ::std::any::Any>)),
+                ),
+            }
+        }
+    }
+
     #[doc(hidden)]
     #[derive(thiserror::Error, Debug)]
     pub enum RouteResolverError {
@@ -95,20 +134,16 @@ pub mod __private {
     }
 
     #[doc(hidden)]
-    pub type FnMethodCustomizer =
+    pub type BoxedFnMethodCustomizer =
         Box<dyn Fn(axum::routing::MethodRouter) -> axum::routing::MethodRouter>;
     #[doc(hidden)]
-    pub type FnRouterCustomizer = Box<dyn Fn(axum::Router) -> axum::Router>;
+    pub type BoxedFnRouterCustomizer = Box<dyn Fn(axum::Router) -> axum::Router>;
 
     /// Trait to generate the routes for an enum
     #[doc(hidden)]
     pub trait Router {
-        type Builder: Default;
-
-        /// Returns a builder to generate with router
-        fn builder() -> Self::Builder {
-            Self::Builder::default()
-        }
+        /// Generates the router
+        fn build(registry: &crate::__private::CustomizerRegistry) -> axum::Router;
         /// Resolve the given enum variant with the parameters
         fn resolve_route(
             &self,

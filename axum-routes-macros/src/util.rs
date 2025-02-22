@@ -26,12 +26,3 @@ pub(crate) fn axum_crate() -> TokenStream {
         }
     }
 }
-
-/// For the builder structure, create the proper function name
-pub(crate) fn builder_fn_name(ident: &Ident) -> Ident {
-    quote::format_ident!("with_customizer_{}", ident)
-}
-
-pub(crate) fn builder_struct_name(ident: &Ident) -> Ident {
-    quote::format_ident!("__{}Builder", ident)
-}

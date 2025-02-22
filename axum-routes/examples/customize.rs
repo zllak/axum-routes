@@ -16,14 +16,10 @@ enum Router {
 
 #[routes]
 enum Nested {
-    #[get("/", handler = get, customize = home_customizer)]
+    #[get("/", handler = get)]
     OtherHome,
 }
 
 fn main() {
-    let _routes = axum_routes::router!(
-        Router,
-        home_customizer = |route| route,
-        other_customizer = |route| route,
-    );
+    let _routes = axum_routes::router!(Router, home_customizer = |route| route);
 }
