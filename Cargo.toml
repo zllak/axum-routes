@@ -7,7 +7,7 @@ resolver = "2"
 
 [workspace.package]
 version = "0.2.2"
-edition = "2021"
+edition = "2024"
 authors = ["Thomas Meson <zllak@hycik.org>"]
 description = "Create an axum Router from an enum and resolve routes"
 homepage = "https://github.com/zllak/axum-routes"
