@@ -13,5 +13,5 @@ enum Router {
 }
 
 fn main() {
-    let _routes = axum_routes::router!(Router, home_customizer = #|route| route);
+    let _routes = axum_routes::router!(Router, home_customizer = $|route| route);
 }

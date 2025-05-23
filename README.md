@@ -63,6 +63,12 @@ async fn main() {
         },
     );
 
+    // Resolve parameterized routes, removing the need to hardcode routes
+    assert_eq!(
+        "/api/users/42",
+        axum_routes::resolve!(MyApp::Api(APIRoutes::GetUsersByID), 42).unwrap()
+    );
+
     // run the app
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();

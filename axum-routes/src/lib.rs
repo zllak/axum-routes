@@ -5,17 +5,19 @@
 //! routes in your project.
 //!
 //! ```ignore,rust
+//! # use axum_routes::routes;
+//!
 //! #[routes]
 //! enum RoutesUsers {
 //!     #[post("/", handler = create_user)]
 //!     CreateUser,
-//!     #[get("/:id", handler = get_user)]
+//!     #[get("/{id}", handler = get_user)]
 //!     GetByID,
-//!     #[put("/:id", handler = edit_user)]
+//!     #[put("/{id}", handler = edit_user)]
 //!     EditUser,
-//!     #[delete("/:id", handler = delete_user)]
+//!     #[delete("/{id}", handler = delete_user)]
 //!     DeleteByID,
-//!     #[get("/other/:id", handler = get_other_resource)]
+//!     #[get("/other/{id}", handler = get_other_resource)]
 //!     GetOtherResourceByID,
 //! }
 //!
@@ -34,11 +36,9 @@
 //! async fn get_other_resource() {}
 //! ```
 //!
-//! The route path (ie "/:id") is exactly what `axum` supports (underneath
-//! it uses the `matchit` crate. At the moment of writing, `axum` still uses
-//! `matchit 0.7.x`, so the parameters are declare `:param`. In `matchit 0.8.x`,
-//! parameters now are declared `{param}`.
-//! So to ease the process, `axum-routes` supports both.
+//! The route path (ie "/{id}") is exactly what `axum` supports (underneath
+//! it uses the `matchit` crate). Newer version of `axum` supports the
+//! `{parameter}` format instead of the old `:parameter` format.
 //!
 //! ## Resolving routes
 #![doc = include_str!("../RESOLVE.md")]
