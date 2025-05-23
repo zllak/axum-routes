@@ -16,6 +16,11 @@ axum-routes-macros.workspace = true
 axum.workspace = true
 thiserror.workspace = true
 
+[dev-dependencies]
+## External
+axum = { version = "0.8", default-features = false, features = ["json"] }
+serde_json = { version = "1.0", default-features = false }
+
 [[example]]
 name = "path_handlers"
 
@@ -24,3 +29,6 @@ name = "visibility"
 
 [[example]]
 name = "multiple_attributes"
+
+[[example]]
+name = "resolve"

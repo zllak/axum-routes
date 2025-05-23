@@ -7,7 +7,7 @@ First, let's define our router as an enum:
 enum MyRoutes {
     #[get("/admin", handler = admin_handler)]
     ProtectedAdmin,
-    #[get("/assets/:asset", handler = assets)]
+    #[get("/assets/{asset}", handler = assets)]
     Assets,
 }
 
@@ -29,7 +29,7 @@ with_state. (See documentation of [MethodRouter](`axum::routing::method_routing:
 enum MyRoutes {
     #[get("/admin", handler = admin_handler, customize = protected_admin)]
     ProtectedAdmin,
-    #[get("/assets/:asset", handler = assets, customize = assets_customize)]
+    #[get("/assets/{asset}", handler = assets, customize = assets_customize)]
     Assets,
 }
 ```
